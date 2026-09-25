@@ -26,14 +26,14 @@ Star Citizen am besten im Modus **Rahmenloses Fenster** spielen, im echten Vollb
 - Liest keine Spieldateien, greift nicht ins Spiel ein und drückt keine Tasten
 - Speichert ihre Einstellungen in `%APPDATA%\CargoDeck\scanner.json`
 
-Der ganze Quellcode liegt im Ordner `src`. Die exe wird von GitHub selbst aus genau diesem Code gebaut, siehe `.github/workflows/build.yml`. Die Prüfsumme steht beim Release in `SHA256.txt`.
+Der ganze Quellcode liegt hier im Repo. Die exe wird von GitHub selbst aus genau diesem Code gebaut, siehe `.github/workflows/build.yml`. Die Prüfsumme steht beim Release in `SHA256.txt`.
 
 ## Selbst bauen
 
 .NET 8 SDK installieren, dann
 
 ```
-dotnet publish src/CargoDeckScanner.csproj -c Release -o out
+dotnet publish CargoDeckScanner.csproj -c Release -o out
 ```
 
 ## Hinweis

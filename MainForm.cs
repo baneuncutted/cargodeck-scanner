@@ -31,7 +31,8 @@ class MainForm : Form
     TextBox tUrl, tCode, tScanKey, tAutoKey;
     RadioButton rHot, rAuto;
     NumericUpDown nInt;
-    CheckBox cSound, cNotify, cAutostart;
+    Toggle cSound, cNotify, cAutostart;
+    bool loading;
     Button bStart, bNow;
     Label lState;
     Panel dot;
@@ -53,7 +54,7 @@ class MainForm : Form
         Font = new Font("Segoe UI", 9.75f);
         FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(S(500), S(760));
+        ClientSize = new Size(S(500), S(828));
         using (var s = typeof(MainForm).Assembly.GetManifestResourceStream("CargoDeckScanner.app.ico"))
             if (s != null) Icon = new Icon(s);
         Build();
@@ -72,110 +73,104 @@ class MainForm : Form
     }
 
     // ---------------- Aufbau ----------------
-    Label L(string text, int x, int y, Color? col = null, float size = 9.75f, bool bold = false, int w = 0)
+    Label L(Control parent, string text, int x, int y, Color? col = null, float size = 9.75f, bool bold = false, int w = 0, int h = 0)
     {
-        var l = new Label { Text = text, Left = S(x), Top = S(y), AutoSize = w == 0, ForeColor = col ?? cText, BackColor = Color.Transparent, Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular) };
-        if (w > 0) { l.Width = S(w); l.Height = S(40); }
-        Controls.Add(l); l.BringToFront(); return l;
+        var l = new Label { Text = text, Left = S(x), Top = S(y), AutoSize = w == 0, ForeColor = col ?? cText, BackColor = parent.BackColor, Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular) };
+        if (w > 0) { l.Width = S(w); l.Height = S(h > 0 ? h : 22); }
+        parent.Controls.Add(l); return l;
     }
-    TextBox T(int x, int y, int w, bool mono = false)
+    TextBox T(Control parent, int x, int y, int w, bool mono = false)
     {
         var t = new TextBox { Left = S(x), Top = S(y), Width = S(w), BackColor = cPanel2, ForeColor = cText, BorderStyle = BorderStyle.FixedSingle, Font = mono ? new Font("Consolas", 12f, FontStyle.Bold) : new Font("Segoe UI", 11f) };
-        Controls.Add(t); t.BringToFront(); return t;
+        parent.Controls.Add(t); return t;
     }
     Button B(string text, int x, int y, int w, int h, bool primary)
     {
-        var b = new Button { Text = text, Left = S(x), Top = S(y), Width = S(w), Height = S(h), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Cursor = Cursors.Hand };
+        var b = new Button { Text = text, Left = S(x), Top = S(y), Width = S(w), Height = S(h), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Cursor = Cursors.Hand, UseVisualStyleBackColor = false };
         StyleButton(b, primary);
-        Controls.Add(b); b.BringToFront(); return b;
+        Controls.Add(b); return b;
     }
     void StyleButton(Button b, bool primary)
     {
         b.BackColor = primary ? cAccent : cPanel2; b.ForeColor = primary ? cDark : cText;
         b.FlatAppearance.BorderColor = primary ? cAccent : cLine; b.FlatAppearance.BorderSize = 1;
         b.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(0x5b, 0xe4, 0xdb) : Color.FromArgb(0x21, 0x2d, 0x3e);
+        b.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(0x1a, 0xa3, 0x9b) : cLine;
     }
-    CheckBox C(string text, int x, int y)
+    Toggle Tg(Control parent, string text, int x, int y)
     {
-        var c = new CheckBox { Text = text, Left = S(x), Top = S(y), AutoSize = true, ForeColor = cText, FlatStyle = FlatStyle.Flat, BackColor = Color.Transparent, Cursor = Cursors.Hand };
-        c.FlatAppearance.BorderColor = cLine; c.FlatAppearance.CheckedBackColor = cAccent;
-        Controls.Add(c); c.BringToFront(); return c;
+        var t = new Toggle { Text = text, Left = S(x), Top = S(y), BackColor = parent.BackColor, ForeColor = cText, OnColor = cAccent, OffColor = cLine, Font = new Font("Segoe UI", 9.75f) };
+        t.Size = t.Measure();
+        parent.Controls.Add(t); return t;
+    }
+    RadioButton R(Control parent, string text, int x, int y)
+    {
+        var r = new RadioButton { Text = text, Left = S(x), Top = S(y), AutoSize = true, ForeColor = cText, BackColor = parent.BackColor, Cursor = Cursors.Hand };
+        parent.Controls.Add(r); return r;
     }
     Panel Card(int y, int h, string title)
     {
-        var p = new Panel { Left = S(16), Top = S(y), Width = S(468), Height = S(h), BackColor = cPanel };
-        p.Paint += (s, e) =>
-        {
-            using var pen = new Pen(cLine);
-            e.Graphics.DrawRectangle(pen, 0, 0, p.Width - 1, p.Height - 1);
-            using var br = new LinearGradientBrush(new Rectangle(0, 0, p.Width, 2), Color.Transparent, cAccent, 0f);
-            var blend = new ColorBlend { Colors = new[] { Color.Transparent, Color.FromArgb(200, cAccent), Color.Transparent }, Positions = new[] { 0f, .5f, 1f } };
-            br.InterpolationColors = blend;
-            e.Graphics.FillRectangle(br, p.Width / 8, 0, p.Width * 3 / 4, 1);
-        };
-        Controls.Add(p); p.SendToBack();
-        if (title != null) L(title.ToUpperInvariant(), 30, y + 12, cMuted, 8.25f, true);
+        var p = new CardPanel { Left = S(16), Top = S(y), Width = S(468), Height = S(h), BackColor = cPanel, LineColor = cLine, GlowColor = cAccent };
+        Controls.Add(p);
+        if (title != null) L(p, title.ToUpperInvariant(), 16, 12, cMuted, 8.25f, true);
         return p;
     }
 
     void Build()
     {
         // Kopf
-        var logo = new PictureBox { Left = S(18), Top = S(16), Width = S(34), Height = S(34), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.Transparent };
+        var logo = new PictureBox { Left = S(18), Top = S(16), Width = S(36), Height = S(36), SizeMode = PictureBoxSizeMode.Zoom, BackColor = cBg };
         if (Icon != null) logo.Image = new Icon(Icon, 64, 64).ToBitmap();
         Controls.Add(logo);
-        var t1 = L("CARGO", 60, 17, cText, 14f, true);
-        L("DECK", 60 + (int)(t1.PreferredWidth / k) + 2, 17, cAccent, 14f, true);
-        L("Scanner für Handelsterminals", 61, 40, cMuted, 9f);
+        var t1 = L(this, "CARGO", 62, 15, cText, 14f, true);
+        L(this, "DECK", 62 + (int)(t1.PreferredWidth / k), 15, cAccent, 14f, true);
+        L(this, "Scanner für Handelsterminals", 64, 40, cMuted, 9f);
 
         // Status
-        Card(66, 56, null);
-        dot = new Panel { Left = S(32), Top = S(88), Width = S(12), Height = S(12), BackColor = cPanel };
+        var ps = Card(68, 52, null);
+        dot = new Panel { Left = S(16), Top = S(20), Width = S(12), Height = S(12), BackColor = cPanel };
         dot.Paint += (s, e) => { e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; using var b = new SolidBrush((Color)dot.Tag); e.Graphics.FillEllipse(b, 0, 0, dot.Width - 1, dot.Height - 1); };
-        dot.Tag = cMuted; Controls.Add(dot); dot.BringToFront();
-        lState = L("Gestoppt", 52, 83, cText, 11f, true, 420);
-        lState.Height = S(24);
+        dot.Tag = cMuted; ps.Controls.Add(dot);
+        lState = L(ps, "Gestoppt", 36, 14, cText, 11f, true, 420, 26);
 
         // Verbindung
-        Card(134, 150, "Verbindung");
-        L("Adresse der Seite", 30, 158, cMuted, 9f);
-        tUrl = T(30, 178, 440);
-        L("Kopplungscode", 30, 214, cMuted, 9f);
-        tCode = T(30, 234, 200, true); tCode.CharacterCasing = CharacterCasing.Upper; tCode.MaxLength = 12;
-        var hint = L("Steht auf der Seite unter Einstellungen, PC Scanner", 240, 238, cMuted, 8.5f, false, 235);
-        hint.Height = S(36);
+        var pv = Card(132, 158, "Verbindung");
+        L(pv, "Adresse der Seite", 16, 36, cMuted, 9f);
+        tUrl = T(pv, 16, 56, 436);
+        L(pv, "Kopplungscode", 16, 94, cMuted, 9f);
+        tCode = T(pv, 16, 114, 190, true); tCode.CharacterCasing = CharacterCasing.Upper; tCode.MaxLength = 12;
+        L(pv, "Steht auf der Seite unter Einstellungen, PC Scanner", 218, 114, cMuted, 8.5f, false, 236, 34);
 
         // Modus
-        Card(296, 112, "Wann scannen");
-        rHot = new RadioButton { Text = "Nur wenn ich die Taste drücke", Left = S(30), Top = S(320), AutoSize = true, ForeColor = cText, BackColor = Color.Transparent, Cursor = Cursors.Hand };
-        rAuto = new RadioButton { Text = "Automatisch alle", Left = S(30), Top = S(348), AutoSize = true, ForeColor = cText, BackColor = Color.Transparent, Cursor = Cursors.Hand };
-        Controls.Add(rHot); Controls.Add(rAuto); rHot.BringToFront(); rAuto.BringToFront();
-        nInt = new NumericUpDown { Left = S(170), Top = S(346), Width = S(56), Minimum = 3, Maximum = 60, BackColor = cPanel2, ForeColor = cText, BorderStyle = BorderStyle.FixedSingle };
-        Controls.Add(nInt); nInt.BringToFront();
-        L("Sekunden", 232, 349, cText);
-        L("Sendet nur, wenn wirklich ein Terminal zu sehen ist", 48, 374, cMuted, 8.5f);
+        var pm = Card(302, 116, "Wann scannen");
+        rHot = R(pm, "Nur wenn ich die Taste drücke", 16, 36);
+        rAuto = R(pm, "Automatisch alle", 16, 66);
+        nInt = new NumericUpDown { Left = S(150), Top = S(64), Width = S(56), Minimum = 3, Maximum = 60, Value = 5, BackColor = cPanel2, ForeColor = cText, BorderStyle = BorderStyle.FixedSingle };
+        pm.Controls.Add(nInt);
+        L(pm, "Sekunden", 212, 67, cText);
+        L(pm, "Sendet nur, wenn wirklich ein Terminal zu sehen ist", 34, 90, cMuted, 8.5f);
 
         // Tasten
-        Card(420, 96, "Tasten");
-        L("Scannen", 30, 446, cText);
-        L("Linke Strg +", 200, 446, cMuted);
-        tScanKey = T(292, 442, 44, true); tScanKey.MaxLength = 1; tScanKey.TextAlign = HorizontalAlignment.Center;
-        L("Automatik an und aus", 30, 480, cText);
-        L("Linke Strg +", 200, 480, cMuted);
-        tAutoKey = T(292, 476, 44, true); tAutoKey.MaxLength = 1; tAutoKey.TextAlign = HorizontalAlignment.Center;
+        var pk = Card(430, 104, "Tasten");
+        L(pk, "Scannen", 16, 42, cText);
+        L(pk, "Linke Strg +", 200, 42, cMuted);
+        tScanKey = T(pk, 290, 37, 44, true); tScanKey.MaxLength = 1; tScanKey.TextAlign = HorizontalAlignment.Center;
+        L(pk, "Automatik an und aus", 16, 74, cText);
+        L(pk, "Linke Strg +", 200, 74, cMuted);
+        tAutoKey = T(pk, 290, 69, 44, true); tAutoKey.MaxLength = 1; tAutoKey.TextAlign = HorizontalAlignment.Center;
 
         // Optionen
-        Card(528, 72, "Optionen");
-        cSound = C("Töne", 30, 556);
-        cNotify = C("Benachrichtigungen", 110, 556);
-        cAutostart = C("Mit Windows starten", 290, 556);
+        var po = Card(546, 110, "Optionen");
+        cSound = Tg(po, "Leise Töne", 16, 38);
+        cNotify = Tg(po, "Benachrichtigungen", 236, 38);
+        cAutostart = Tg(po, "Mit Windows starten", 16, 72);
 
         // Knöpfe
-        bStart = B("Starten", 16, 614, 228, 44, true);
-        bNow = B("Jetzt scannen", 256, 614, 228, 44, false);
+        bStart = B("Starten", 16, 670, 228, 46, true);
+        bNow = B("Jetzt scannen", 256, 670, 228, 46, false);
 
         // Verlauf
-        log = new ListBox { Left = S(16), Top = S(670), Width = S(468), Height = S(76), BackColor = cPanel, ForeColor = cMuted, BorderStyle = BorderStyle.FixedSingle, IntegralHeight = false, Font = new Font("Segoe UI", 8.75f), SelectionMode = SelectionMode.None };
+        log = new ListBox { Left = S(16), Top = S(728), Width = S(468), Height = S(84), BackColor = cPanel, ForeColor = cMuted, BorderStyle = BorderStyle.FixedSingle, IntegralHeight = false, Font = new Font("Segoe UI", 8.75f), SelectionMode = SelectionMode.None };
         Controls.Add(log);
 
         bStart.Click += (s, e) => { if (running) StopScanner(); else StartScanner(); };
@@ -187,9 +182,12 @@ class MainForm : Form
             await Task.Delay(700);
             await Scan(false);
         };
-        rAuto.CheckedChanged += (s, e) => { ReadForm(); if (running) ShowRunning(); if (miAuto != null) miAuto.Checked = rAuto.Checked; };
-        nInt.ValueChanged += (s, e) => ReadForm();
-        foreach (var c in new[] { cSound, cNotify, cAutostart }) c.CheckedChanged += (s, e) => ReadForm();
+        rAuto.CheckedChanged += (s, e) => { if (loading) return; ReadForm(); if (running) ShowRunning(); if (miAuto != null) miAuto.Checked = rAuto.Checked; };
+        nInt.ValueChanged += (s, e) => { if (!loading) ReadForm(); if (running) ShowRunning(); };
+        cSound.CheckedChanged += (s, e) => { if (loading) return; ReadForm(); if (cfg.Sounds) Sound.Play(Sound.On); };
+        cNotify.CheckedChanged += (s, e) => { if (!loading) ReadForm(); };
+        cAutostart.CheckedChanged += (s, e) => { if (!loading) ReadForm(); };
+        foreach (var t in new[] { tUrl, tScanKey, tAutoKey }) t.Leave += (s, e) => { if (!loading) ReadForm(); };
         tCode.TextChanged += (s, e) =>
         {
             var clean = Regex.Replace(tCode.Text.ToUpperInvariant(), "[^A-Z2-9]", "");
@@ -199,11 +197,13 @@ class MainForm : Form
 
     void LoadForm()
     {
+        loading = true;
         tUrl.Text = cfg.Url; tCode.Text = cfg.Code;
         rAuto.Checked = cfg.Mode == "auto"; rHot.Checked = !rAuto.Checked;
         nInt.Value = Math.Clamp(cfg.Interval, 3, 60);
         tScanKey.Text = cfg.ScanKey; tAutoKey.Text = cfg.AutoKey;
         cSound.Checked = cfg.Sounds; cNotify.Checked = cfg.Notify; cAutostart.Checked = cfg.Autostart;
+        loading = false;
     }
 
     void ReadForm()
@@ -270,10 +270,9 @@ class MainForm : Form
         if (!cfg.Notify) return;
         try { tray.ShowBalloonTip(2500, "Cargo Deck", text, ToolTipIcon.None); } catch { }
     }
-    void Beep(params int[] freqs)
+    void Beep(Sound.Kind kind)
     {
-        if (!cfg.Sounds) return;
-        Task.Run(() => { foreach (var f in freqs) try { Console.Beep(f, 90); } catch { } });
+        if (cfg.Sounds) Sound.Play(kind);
     }
     void ShowRunning()
     {
@@ -289,15 +288,15 @@ class MainForm : Form
         { MessageBox.Show(this, "Der Kopplungscode hat 12 Zeichen. Du findest ihn auf der Seite unter Einstellungen, PC Scanner.", "Cargo Deck Scanner"); return; }
         running = true; lastPrint = ""; nextAuto = DateTime.Now; lastPing = DateTime.MinValue;
         bStart.Text = "Stoppen"; StyleButton(bStart, false);
-        foreach (Control c in new Control[] { tUrl, tCode, tScanKey, tAutoKey }) c.Enabled = false;
-        ShowRunning(); Log($"Gestartet, Linke Strg + {cfg.ScanKey} scannt"); Beep(900, 1300);
+        foreach (var t in new[] { tUrl, tCode, tScanKey, tAutoKey }) { t.ReadOnly = true; t.ForeColor = cMuted; t.BackColor = cPanel; }
+        ShowRunning(); Log($"Gestartet, Linke Strg + {cfg.ScanKey} scannt"); Beep(Sound.On);
     }
 
     void StopScanner()
     {
         running = false;
         bStart.Text = "Starten"; StyleButton(bStart, true);
-        foreach (Control c in new Control[] { tUrl, tCode, tScanKey, tAutoKey }) c.Enabled = true;
+        foreach (var t in new[] { tUrl, tCode, tScanKey, tAutoKey }) { t.ReadOnly = false; t.ForeColor = cText; t.BackColor = cPanel2; }
         SetState("Gestoppt", cMuted); Log("Gestoppt");
     }
 
@@ -318,8 +317,8 @@ class MainForm : Form
             wasScan = scan; wasAuto = auto;
             if (autoEdge)
             {
-                if (rAuto.Checked) { rHot.Checked = true; Log("Automatik aus"); Beep(700); Notify("Automatik aus"); }
-                else { rAuto.Checked = true; Log("Automatik an"); Beep(900, 1300, 1700); Notify($"Automatik an, alle {cfg.Interval} Sekunden"); }
+                if (rAuto.Checked) { rHot.Checked = true; Log("Automatik aus"); Beep(Sound.Off); Notify("Automatik aus"); }
+                else { rAuto.Checked = true; Log("Automatik an"); Beep(Sound.On); Notify($"Automatik an, alle {cfg.Interval} Sekunden"); }
             }
             if (DateTime.Now - lastPing > TimeSpan.FromSeconds(30)) { lastPing = DateTime.Now; _ = Ping(); }
             if (scanEdge) await Scan(false);
@@ -416,7 +415,7 @@ class MainForm : Form
             catch (Exception ex)
             {
                 Log("Senden fehlgeschlagen " + ex.Message); SetState("Seite nicht erreichbar, Adresse prüfen", cBad);
-                if (!auto) { Beep(300); Notify("Senden fehlgeschlagen, ist die Adresse richtig?"); }
+                if (!auto) { Beep(Sound.Error); Notify("Senden fehlgeschlagen, ist die Adresse richtig?"); }
                 return;
             }
 
@@ -427,14 +426,14 @@ class MainForm : Form
                 string st = ""; try { st = ((string)r["station"] ?? "").Split(" > ").Last(); } catch { }
                 Log($"{rows} Preise erkannt {st}".Trim());
                 SetState($"Letzter Scan {DateTime.Now:HH:mm}, {rows} Preise", cGood);
-                Beep(1100, 1500); Notify($"{rows} Preise erkannt {st}, schau auf die Seite".Replace("  ", " "));
+                Beep(Sound.Success); Notify($"{rows} Preise erkannt {st}, schau auf die Seite".Replace("  ", " "));
             }
             else if (!auto)
             {
                 string n = "Kein Terminal erkannt";
                 try { n = (string)r?["error"] ?? (string)r?["note"] ?? n; } catch { }
                 if (!resp.IsSuccessStatusCode && r?["error"] == null) n = $"Seite antwortet mit Fehler {(int)resp.StatusCode}";
-                Log(n); SetState(n, cWarn); Beep(400);
+                Log(n); SetState(n, cWarn); Beep(Sound.Error);
             }
         }
         finally
