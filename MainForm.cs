@@ -278,7 +278,9 @@ class MainForm : Form
             ReadForm(); cfg.Save();
             Log("Gespeichert, starte neu");
             var args = running ? "--restart --run" : "--restart";
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath, args) { UseShellExecute = false });
+            // Aus dem Store über den App Alias neu starten, sonst direkt die exe
+            if (Packaged.IsPackaged) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Packaged.Alias, args) { UseShellExecute = true });
+            else System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath, args) { UseShellExecute = false });
             tray.Visible = false;
             Application.Exit();
         }

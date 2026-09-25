@@ -38,7 +38,7 @@ static class Program
             return 0;
         }
         ApplicationConfiguration.Initialize();
-        var form = new MainForm(args.Contains("--tray"), args.Contains("--run"));
+        var form = new MainForm(args.Contains("--tray") || Packaged.StartedByWindows(), args.Contains("--run"));
         // Prüfmodus, speichert ein Bild vom Fenster und beendet sich
         int ui = Array.IndexOf(args, "--ui-shot");
         if (ui >= 0 && ui + 1 < args.Length)

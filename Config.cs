@@ -54,6 +54,7 @@ class Config
 
     static void SetAutostart(bool on)
     {
+        if (Packaged.IsPackaged) { Packaged.SetStartup(on); return; }
         try
         {
             using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
