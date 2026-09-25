@@ -17,7 +17,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - name: Bauen
-        run: dotnet publish src/CargoDeckScanner.csproj -c Release -o out
+        run: dotnet publish CargoDeckScanner.csproj -c Release -o out
       - name: Prüfsumme
         shell: pwsh
         run: (Get-FileHash out/CargoDeckScanner.exe -Algorithm SHA256).Hash | Out-File out/SHA256.txt -Encoding ascii
