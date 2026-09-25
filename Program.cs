@@ -20,14 +20,25 @@ static class Program
             catch (Exception ex) { File.WriteAllText(args[2], "{\"ok\":false,\"error\":" + System.Text.Json.JsonSerializer.Serialize(ex.ToString()) + "}"); return 1; }
         }
 
+        // Fehler abfangen und in eine Datei schreiben statt abzustürzen
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (s, e) => Crash(e.Exception, true);
+        AppDomain.CurrentDomain.UnhandledException += (s, e) => Crash(e.ExceptionObject as Exception, false);
+        TaskScheduler.UnobservedTaskException += (s, e) => { Crash(e.Exception, false); e.SetObserved(); };
+
         using var mutex = new Mutex(true, "CargoDeckScanner_single", out bool first);
-        if (!first)
+        if (!first && args.Contains("--restart"))
+        {
+            // Beim Neustart warten, bis die alte App zu ist
+            try { first = mutex.WaitOne(10000); } catch (AbandonedMutexException) { first = true; }
+        }
+        if (!first && !args.Contains("--ui-shot"))
         {
             MessageBox.Show("Der Cargo Deck Scanner läuft schon. Du findest ihn unten rechts bei den Symbolen neben der Uhr.", "Cargo Deck Scanner");
             return 0;
         }
         ApplicationConfiguration.Initialize();
-        var form = new MainForm(args.Contains("--tray"));
+        var form = new MainForm(args.Contains("--tray"), args.Contains("--run"));
         // Prüfmodus, speichert ein Bild vom Fenster und beendet sich
         int ui = Array.IndexOf(args, "--ui-shot");
         if (ui >= 0 && ui + 1 < args.Length)
@@ -44,5 +55,17 @@ static class Program
         }
         Application.Run(form);
         return 0;
+    }
+
+    static void Crash(Exception ex, bool show)
+    {
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CargoDeck");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "scanner-fehler.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {ex}\r\n\r\n");
+        }
+        catch { }
+        if (show) try { MessageBox.Show("Da ist etwas schiefgelaufen, der Scanner läuft aber weiter.\n\n" + ex?.Message + "\n\nDetails stehen in %APPDATA%\\CargoDeck\\scanner-fehler.log", "Cargo Deck Scanner"); } catch { }
     }
 }

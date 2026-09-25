@@ -28,7 +28,9 @@ class MainForm : Form
     string lastPrint = "";
     DateTime nextAuto = DateTime.MinValue, lastPing = DateTime.MinValue;
 
-    TextBox tUrl, tCode, tScanKey, tAutoKey;
+    TextBox tUrl, tCode;
+    KeyBox kScan, kAuto;
+    Button bSave;
     RadioButton rHot, rAuto;
     NumericUpDown nInt;
     Toggle cSound, cNotify, cAutostart;
@@ -44,9 +46,10 @@ class MainForm : Form
     float k;
     int S(float v) => (int)Math.Round(v * k);
 
-    public MainForm(bool tray)
+    readonly bool startRun;
+    public MainForm(bool tray, bool run = false)
     {
-        startInTray = tray;
+        startInTray = tray; startRun = run;
         AutoScaleMode = AutoScaleMode.None;
         k = DeviceDpi / 96f;
         Text = "Cargo Deck Scanner";
@@ -103,6 +106,13 @@ class MainForm : Form
         t.Size = t.Measure();
         parent.Controls.Add(t); return t;
     }
+    KeyBox KB(Control parent, int x, int y)
+    {
+        var k = new KeyBox { Left = S(x), Top = S(y), Width = S(96), Height = S(28), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 10f, FontStyle.Bold), Cursor = Cursors.Hand, UseVisualStyleBackColor = false, BackColor = cPanel2, ForeColor = cText, TabStop = true };
+        k.FlatAppearance.BorderColor = cLine; k.FlatAppearance.MouseOverBackColor = Color.FromArgb(0x21, 0x2d, 0x3e);
+        k.Changed += (s, e) => { StyleButton(bSave, true); Log($"Neue Taste {KeyNames.Name(k.Vk)}, jetzt speichern"); };
+        parent.Controls.Add(k); return k;
+    }
     RadioButton R(Control parent, string text, int x, int y)
     {
         var r = new RadioButton { Text = text, Left = S(x), Top = S(y), AutoSize = true, ForeColor = cText, BackColor = parent.BackColor, Cursor = Cursors.Hand };
@@ -151,13 +161,16 @@ class MainForm : Form
         L(pm, "Sendet nur, wenn wirklich ein Terminal zu sehen ist", 34, 90, cMuted, 8.5f);
 
         // Tasten
-        var pk = Card(430, 104, "Tasten");
+        var pk = Card(430, 104, "Tasten · anklicken und neue Taste drücken");
         L(pk, "Scannen", 16, 42, cText);
-        L(pk, "Linke Strg +", 200, 42, cMuted);
-        tScanKey = T(pk, 290, 37, 44, true); tScanKey.MaxLength = 1; tScanKey.TextAlign = HorizontalAlignment.Center;
+        L(pk, "Linke Strg +", 164, 42, cMuted);
+        kScan = KB(pk, 250, 36);
         L(pk, "Automatik an und aus", 16, 74, cText);
-        L(pk, "Linke Strg +", 200, 74, cMuted);
-        tAutoKey = T(pk, 290, 69, 44, true); tAutoKey.MaxLength = 1; tAutoKey.TextAlign = HorizontalAlignment.Center;
+        L(pk, "Linke Strg +", 164, 74, cMuted);
+        kAuto = KB(pk, 250, 68);
+        bSave = new Button { Text = "Speichern\nNeustart", Left = S(358), Top = S(36), Width = S(96), Height = S(58), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 9f, FontStyle.Bold), Cursor = Cursors.Hand, UseVisualStyleBackColor = false };
+        StyleButton(bSave, false); pk.Controls.Add(bSave);
+        bSave.Click += (s, e) => SaveAndRestart();
 
         // Optionen
         var po = Card(546, 110, "Optionen");
@@ -187,7 +200,7 @@ class MainForm : Form
         cSound.CheckedChanged += (s, e) => { if (loading) return; ReadForm(); if (cfg.Sounds) Sound.Play(Sound.On); };
         cNotify.CheckedChanged += (s, e) => { if (!loading) ReadForm(); };
         cAutostart.CheckedChanged += (s, e) => { if (!loading) ReadForm(); };
-        foreach (var t in new[] { tUrl, tScanKey, tAutoKey }) t.Leave += (s, e) => { if (!loading) ReadForm(); };
+        tUrl.Leave += (s, e) => { if (!loading) ReadForm(); };
         tCode.TextChanged += (s, e) =>
         {
             var clean = Regex.Replace(tCode.Text.ToUpperInvariant(), "[^A-Z2-9]", "");
@@ -201,7 +214,7 @@ class MainForm : Form
         tUrl.Text = cfg.Url; tCode.Text = cfg.Code;
         rAuto.Checked = cfg.Mode == "auto"; rHot.Checked = !rAuto.Checked;
         nInt.Value = Math.Clamp(cfg.Interval, 3, 60);
-        tScanKey.Text = cfg.ScanKey; tAutoKey.Text = cfg.AutoKey;
+        kScan.Vk = cfg.ScanVk; kAuto.Vk = cfg.AutoVk;
         cSound.Checked = cfg.Sounds; cNotify.Checked = cfg.Notify; cAutostart.Checked = cfg.Autostart;
         loading = false;
     }
@@ -212,8 +225,8 @@ class MainForm : Form
         cfg.Code = tCode.Text.Trim().ToUpperInvariant();
         cfg.Mode = rAuto.Checked ? "auto" : "hotkey";
         cfg.Interval = (int)nInt.Value;
-        cfg.ScanKey = string.IsNullOrWhiteSpace(tScanKey.Text) ? "ö" : tScanKey.Text.Trim();
-        cfg.AutoKey = string.IsNullOrWhiteSpace(tAutoKey.Text) ? "ä" : tAutoKey.Text.Trim();
+        if (kScan.Vk > 0) { cfg.ScanVk = kScan.Vk; cfg.ScanKey = KeyNames.Name(kScan.Vk); }
+        if (kAuto.Vk > 0) { cfg.AutoVk = kAuto.Vk; cfg.AutoKey = KeyNames.Name(kAuto.Vk); }
         cfg.Sounds = cSound.Checked; cfg.Notify = cNotify.Checked; cfg.Autostart = cAutostart.Checked;
         cfg.Save();
     }
@@ -244,7 +257,7 @@ class MainForm : Form
     {
         base.OnShown(e);
         Log("Bereit");
-        if ((startInTray || cfg.Autostart) && CodeRe.IsMatch(cfg.Code) && cfg.Url.StartsWith("http"))
+        if ((startInTray || startRun || cfg.Autostart) && CodeRe.IsMatch(cfg.Code) && cfg.Url.StartsWith("http"))
         {
             StartScanner();
             if (startInTray) { WindowState = FormWindowState.Minimized; }
@@ -256,6 +269,20 @@ class MainForm : Form
         ReadForm();
         tray.Visible = false; tray.Dispose();
         base.OnFormClosing(e);
+    }
+
+    void SaveAndRestart()
+    {
+        try
+        {
+            ReadForm(); cfg.Save();
+            Log("Gespeichert, starte neu");
+            var args = running ? "--restart --run" : "--restart";
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath, args) { UseShellExecute = false });
+            tray.Visible = false;
+            Application.Exit();
+        }
+        catch (Exception ex) { Log("Speichern ging nicht " + ex.Message); }
     }
 
     // ---------------- Zustand ----------------
@@ -288,7 +315,7 @@ class MainForm : Form
         { MessageBox.Show(this, "Der Kopplungscode hat 12 Zeichen. Du findest ihn auf der Seite unter Einstellungen, PC Scanner.", "Cargo Deck Scanner"); return; }
         running = true; lastPrint = ""; nextAuto = DateTime.Now; lastPing = DateTime.MinValue;
         bStart.Text = "Stoppen"; StyleButton(bStart, false);
-        foreach (var t in new[] { tUrl, tCode, tScanKey, tAutoKey }) { t.ReadOnly = true; t.ForeColor = cMuted; t.BackColor = cPanel; }
+        foreach (var t in new[] { tUrl, tCode }) { t.ReadOnly = true; t.ForeColor = cMuted; t.BackColor = cPanel; }
         ShowRunning(); Log($"Gestartet, Linke Strg + {cfg.ScanKey} scannt"); Beep(Sound.On);
     }
 
@@ -296,7 +323,7 @@ class MainForm : Form
     {
         running = false;
         bStart.Text = "Starten"; StyleButton(bStart, true);
-        foreach (var t in new[] { tUrl, tCode, tScanKey, tAutoKey }) { t.ReadOnly = false; t.ForeColor = cText; t.BackColor = cPanel2; }
+        foreach (var t in new[] { tUrl, tCode }) { t.ReadOnly = false; t.ForeColor = cText; t.BackColor = cPanel2; }
         SetState("Gestoppt", cMuted); Log("Gestoppt");
     }
 
@@ -304,7 +331,7 @@ class MainForm : Form
     [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern short VkKeyScan(char ch);
     static bool Down(int vk) => vk > 0 && (GetAsyncKeyState(vk) & 0x8000) != 0;
-    static int Vk(string s) => string.IsNullOrEmpty(s) ? 0 : VkKeyScan(s[0]) & 0xFF;
+
 
     async void Tick(object sender, EventArgs e)
     {
@@ -312,7 +339,7 @@ class MainForm : Form
         try
         {
             bool ctrl = Down(0xA2);
-            bool scan = ctrl && Down(Vk(cfg.ScanKey)), auto = ctrl && Down(Vk(cfg.AutoKey));
+            bool scan = ctrl && Down(cfg.ScanVk), auto = ctrl && Down(cfg.AutoVk);
             bool scanEdge = scan && !wasScan, autoEdge = auto && !wasAuto;
             wasScan = scan; wasAuto = auto;
             if (autoEdge)

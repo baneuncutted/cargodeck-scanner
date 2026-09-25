@@ -11,6 +11,8 @@ class Config
     public int Interval { get; set; } = 5;
     public string ScanKey { get; set; } = "ö";
     public string AutoKey { get; set; } = "ä";
+    public int ScanVk { get; set; }
+    public int AutoVk { get; set; }
     public bool Sounds { get; set; } = true;
     public bool Notify { get; set; } = true;
     public bool Autostart { get; set; } = false;
@@ -30,11 +32,13 @@ class Config
                 c.Interval = Math.Clamp(c.Interval, 3, 60);
                 if (string.IsNullOrEmpty(c.ScanKey)) c.ScanKey = "ö";
                 if (string.IsNullOrEmpty(c.AutoKey)) c.AutoKey = "ä";
+                if (c.ScanVk <= 0) c.ScanVk = KeyNames.FromChar(c.ScanKey);
+                if (c.AutoVk <= 0) c.AutoVk = KeyNames.FromChar(c.AutoKey);
                 return c;
             }
         }
         catch { }
-        return new Config();
+        var n = new Config(); n.ScanVk = KeyNames.FromChar(n.ScanKey); n.AutoVk = KeyNames.FromChar(n.AutoKey); return n;
     }
 
     public void Save()
