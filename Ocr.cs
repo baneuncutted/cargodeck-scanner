@@ -24,15 +24,16 @@ static class Ocr
         return _engine;
     }
 
-    record Pass(string Name, bool Invert, double Cx, double Cw, double Zoom, float Contrast = 1f);
+    // Max: hellster Farbkanal statt Grau. Rote und orange Schrift (Pyro Terminals) wird in Grau viel zu dunkel.
+    record Pass(string Name, bool Invert, double Cx, double Cw, double Zoom, float Contrast = 1f, bool Max = false);
 
     static readonly Pass[] Plan =
     {
         new("rechts", true, 0.5, 0.5, 2),
         new("links", true, 0.0, 0.5, 2),
         // Zusätzlich mit starkem Kontrast und noch grösser, damit blasse und kleine Zahlen sauber gelesen werden
-        new("rechts-k", true, 0.5, 0.5, 3, 1.9f),
-        new("links-k", true, 0.0, 0.5, 3, 1.9f),
+        new("rechts-k", true, 0.5, 0.5, 3, 1.9f, true),
+        new("links-k", true, 0.0, 0.5, 3, 1.9f, true),
         new("invert", true, 0.0, 1.0, 1),
         new("normal", false, 0.0, 1.0, 1),
     };
@@ -62,7 +63,7 @@ static class Ocr
             int sx = (int)(src.Width * p.Cx), sw = (int)(src.Width * p.Cw);
             double maxDim = OcrEngine.MaxImageDimension, longest = Math.Max(sw, src.Height), scale = p.Zoom;
             if (p.Zoom == 1 && longest < 2000) scale = Math.Min(1.6, maxDim / longest);
-            var lines = await Read(engine, src, new Rectangle(sx, 0, sw, src.Height), scale, p.Invert, p.Contrast, false);
+            var lines = await Read(engine, src, new Rectangle(sx, 0, sw, src.Height), scale, p.Invert, p.Contrast, false, p.Max);
             all.Add((p.Name, lines));
         }
 
@@ -75,7 +76,7 @@ static class Ocr
             foreach (var (name, r) in new[] { ("terminal-l", new Rectangle(t.X, t.Y, half, t.Height)), ("terminal-r", new Rectangle(t.X + half, t.Y, t.Width - half, t.Height)) })
             {
                 double scale = Math.Min(3, OcrEngine.MaxImageDimension / (double)Math.Max(r.Width, r.Height));
-                all.Add((name, await Read(engine, src, r, scale, true, 1.6f, false)));
+                all.Add((name, await Read(engine, src, r, scale, true, 1.6f, false, true)));
             }
         }
 
@@ -94,7 +95,7 @@ static class Ocr
                 foreach (var r in regions)
                 {
                     double scale = Math.Clamp(64.0 / Math.Max(1, r.Height / 1.6), 2, 8);
-                    var got = await Read(engine, img, r, scale, false, 1f, true);
+                    var got = await Read(engine, img, r, scale, false, 1f, true, true);
                     if (got.Count == 0) continue;
                     var txt = string.Join(" ", got.OrderBy(g => g.X).Select(g => g.T));
                     fresh.Add(new Line(txt, got.Min(g => g.X), got.Min(g => g.Y), got.Max(g => g.X + g.W) - got.Min(g => g.X), got.Max(g => g.Y + g.H) - got.Min(g => g.Y)));
@@ -148,7 +149,7 @@ static class Ocr
     }
 
     // Ausschnitt vergrössern, einfärben und lesen. Koordinaten kommen zurück ins Originalbild.
-    static async Task<List<Line>> Read(OcrEngine engine, Bitmap src, Rectangle r, double scale, bool invert, float k, bool binar)
+    static async Task<List<Line>> Read(OcrEngine engine, Bitmap src, Rectangle r, double scale, bool invert, float k, bool binar, bool maxCh = false)
     {
         double maxDim = OcrEngine.MaxImageDimension;
         if (Math.Max(r.Width, r.Height) * scale > maxDim) scale = maxDim / Math.Max(r.Width, r.Height);
@@ -161,20 +162,25 @@ static class Ocr
             g.Clear(Color.White);
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            float a = (invert ? -0.3f : 0.3f) * k, b = (invert ? -0.59f : 0.59f) * k, c = (invert ? -0.11f : 0.11f) * k;
-            float o = (invert ? 1f : 0f) * k - (k - 1f) / 2f;
-            var cm = new ColorMatrix(new[]
+            if (maxCh) g.DrawImage(src, new Rectangle(pad, pad, w, h), r.X, r.Y, r.Width, r.Height, GraphicsUnit.Pixel);
+            else
             {
-                new[] { a, a, a, 0f, 0f },
-                new[] { b, b, b, 0f, 0f },
-                new[] { c, c, c, 0f, 0f },
-                new[] { 0f, 0f, 0f, 1f, 0f },
-                new[] { o, o, o, 0f, 1f },
-            });
-            using var ia = new ImageAttributes();
-            ia.SetColorMatrix(cm);
-            g.DrawImage(src, new Rectangle(pad, pad, w, h), r.X, r.Y, r.Width, r.Height, GraphicsUnit.Pixel, ia);
+                float a = (invert ? -0.3f : 0.3f) * k, b = (invert ? -0.59f : 0.59f) * k, c = (invert ? -0.11f : 0.11f) * k;
+                float o = (invert ? 1f : 0f) * k - (k - 1f) / 2f;
+                var cm = new ColorMatrix(new[]
+                {
+                    new[] { a, a, a, 0f, 0f },
+                    new[] { b, b, b, 0f, 0f },
+                    new[] { c, c, c, 0f, 0f },
+                    new[] { 0f, 0f, 0f, 1f, 0f },
+                    new[] { o, o, o, 0f, 1f },
+                });
+                using var ia = new ImageAttributes();
+                ia.SetColorMatrix(cm);
+                g.DrawImage(src, new Rectangle(pad, pad, w, h), r.X, r.Y, r.Width, r.Height, GraphicsUnit.Pixel, ia);
+            }
         }
+        if (maxCh && !binar) MaxChannel(bmp, invert, k);
         if (binar) Binarize(bmp, pad);
 
         var sb = ToSoftwareBitmap(bmp);
@@ -196,6 +202,29 @@ static class Ocr
         return lines;
     }
 
+    // Hellster Kanal als Grauwert, optional umgedreht und mit mehr Kontrast
+    static void MaxChannel(Bitmap bmp, bool invert, float k)
+    {
+        var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+        try
+        {
+            int n = data.Stride * bmp.Height;
+            var px = new byte[n];
+            Marshal.Copy(data.Scan0, px, 0, n);
+            for (int y = 0; y < bmp.Height; y++)
+                for (int x = 0; x < bmp.Width; x++)
+                {
+                    int i = y * data.Stride + x * 4;
+                    int v = Math.Max(px[i], Math.Max(px[i + 1], px[i + 2]));
+                    if (invert) v = 255 - v;
+                    v = (int)Math.Clamp((v - 128) * k + 128, 0, 255);
+                    px[i] = px[i + 1] = px[i + 2] = (byte)v; px[i + 3] = 255;
+                }
+            Marshal.Copy(px, 0, data.Scan0, n);
+        }
+        finally { bmp.UnlockBits(data); }
+    }
+
     // Reines Schwarz Weiss mit automatischer Schwelle (Otsu). Schrift wird immer schwarz auf weiss.
     static void Binarize(Bitmap bmp, int pad)
     {
@@ -212,7 +241,7 @@ static class Ocr
                 for (int x = pad; x < bmp.Width - pad; x++)
                 {
                     int i = y * data.Stride + x * 4;
-                    hist[(px[i] * 11 + px[i + 1] * 59 + px[i + 2] * 30) / 100]++; cnt++;
+                    hist[Math.Max(px[i], Math.Max(px[i + 1], px[i + 2]))]++; cnt++;
                 }
             if (cnt == 0) return;
             double sum = 0; for (int t = 0; t < 256; t++) sum += t * hist[t];
@@ -232,7 +261,7 @@ static class Ocr
                 {
                     int i = y * data.Stride + x * 4;
                     bool inside = x >= pad && y >= pad && x < bmp.Width - pad && y < bmp.Height - pad;
-                    int g = (px[i] * 11 + px[i + 1] * 59 + px[i + 2] * 30) / 100;
+                    int g = Math.Max(px[i], Math.Max(px[i + 1], px[i + 2]));
                     bool text = inside && (textBright ? g > th : g <= th);
                     byte v = text ? (byte)0 : (byte)255;
                     px[i] = px[i + 1] = px[i + 2] = v; px[i + 3] = 255;
