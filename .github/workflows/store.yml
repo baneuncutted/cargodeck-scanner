@@ -28,8 +28,16 @@ jobs:
       - name: Paket vorbereiten
         shell: pwsh
         run: |
-          Copy-Item Package/Assets pkg/Assets -Recurse -Force
-          $m = Get-Content Package/AppxManifest.xml -Raw -Encoding UTF8
+          # Logos und Manifest suchen, egal ob sie im Ordner Package, Assets oder direkt im Repo liegen
+          New-Item -ItemType Directory -Force pkg/Assets | Out-Null
+          $logos = Get-ChildItem -Recurse -File -Include 'Square44x44Logo*.png','Square150x150Logo*.png','Wide310x150Logo*.png','StoreLogo*.png','SplashScreen*.png' | Where-Object { $_.FullName -notmatch '\\(pkg|bin|obj)\\' }
+          if (-not $logos) { Write-Error "Keine Logos gefunden. Bitte die PNG Dateien aus Package/Assets ins Repo hochladen."; exit 1 }
+          $logos | ForEach-Object { Copy-Item $_.FullName (Join-Path 'pkg/Assets' $_.Name) -Force }
+          Write-Host "Logos:" ($logos.Name -join ', ')
+          $mf = Get-ChildItem -Recurse -File -Filter AppxManifest.xml | Where-Object { $_.FullName -notmatch '\\(pkg|bin|obj)\\' } | Select-Object -First 1
+          if (-not $mf) { Write-Error "AppxManifest.xml nicht gefunden. Bitte aus dem Ordner Package hochladen."; exit 1 }
+          Write-Host "Manifest:" $mf.FullName
+          $m = Get-Content $mf.FullName -Raw -Encoding UTF8
           $m = $m.Replace('__VERSION__', '${{ inputs.version }}')
           [IO.File]::WriteAllText("$PWD/pkg/AppxManifest.xml", $m, (New-Object Text.UTF8Encoding $false))
 
