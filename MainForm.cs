@@ -421,10 +421,20 @@ class MainForm : Form
                 lastPrint = pr;
             }
             if (!auto) SetState("Lese Terminal…", cWarn);
+            // Zwei weitere Bilder kurz danach, das Terminal flimmert im Spiel leicht. Die Preise werden auf allen gelesen.
+            var shots = new List<Bitmap> { bmp };
+            var fg = GetForegroundWindow();
+            for (int i = 0; i < (auto ? 1 : 2); i++)
+            {
+                await Task.Delay(350);
+                if (GetForegroundWindow() != fg) break;
+                try { shots.Add(TakeShot()); } catch { break; }
+            }
             var img = Jpeg64(bmp);
             JsonObject ocr;
-            try { ocr = await Task.Run(() => Ocr.Run(bmp)); }
+            try { ocr = await Task.Run(() => Ocr.Run(shots)); }
             catch (Exception ex) { Log("Texterkennung Fehler " + ex.Message); if (!auto) SetState("Texterkennung ging nicht", cBad); return; }
+            finally { foreach (var s in shots.Skip(1)) s.Dispose(); }
 
             if (auto)
             {
