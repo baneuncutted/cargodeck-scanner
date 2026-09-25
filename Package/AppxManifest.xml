@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Store Paket für den Cargo Deck Scanner. Die Version füllt der GitHub Workflow ein. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 uap5 desktop rescap">
+
+  <Identity Name="CargoDeck.CargoDeckScanner" Publisher="CN=FFF76B2B-F752-4A26-B12E-2D33F7D4EEBB" Version="__VERSION__" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Cargo Deck Scanner</DisplayName>
+    <PublisherDisplayName>CargoDeck</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Liest Preise und Bestand von Star Citizen Handelsterminals und schickt sie an Cargo Deck.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="de-DE" />
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application Id="CargoDeckScanner" Executable="CargoDeckScanner.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Cargo Deck Scanner" Description="Scanner für Star Citizen Handelsterminals"
+        BackgroundColor="#0c1119" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="Cargo Deck" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#0c1119" />
+      </uap:VisualElements>
+      <Extensions>
+        <desktop:Extension Category="windows.startupTask" Executable="CargoDeckScanner.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="CargoDeckScannerStartup" Enabled="false" DisplayName="Cargo Deck Scanner" />
+        </desktop:Extension>
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="CargoDeckScanner.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="cargodeckscanner.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
