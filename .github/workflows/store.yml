@@ -1,0 +1,48 @@
+name: Store Paket bauen
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, vier Zahlen, die letzte immer 0, zum Beispiel 1.2.0.0"
+        required: true
+        default: "1.2.0.0"
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Version prüfen
+        shell: pwsh
+        run: |
+          if ("${{ inputs.version }}" -notmatch '^\d+\.\d+\.\d+\.0$') { Write-Error "Version muss so aussehen 1.2.0.0, die letzte Zahl 0"; exit 1 }
+
+      - name: App bauen
+        run: dotnet publish CargoDeckScanner.csproj -c Release -o pkg -p:PublishSingleFile=false -p:SelfContained=true -p:RuntimeIdentifier=win-x64
+
+      - name: Paket vorbereiten
+        shell: pwsh
+        run: |
+          Copy-Item Package/Assets pkg/Assets -Recurse -Force
+          $m = Get-Content Package/AppxManifest.xml -Raw -Encoding UTF8
+          $m = $m.Replace('__VERSION__', '${{ inputs.version }}')
+          [IO.File]::WriteAllText("$PWD/pkg/AppxManifest.xml", $m, (New-Object Text.UTF8Encoding $false))
+
+      - name: MSIX packen
+        shell: pwsh
+        run: |
+          $mk = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter makeappx.exe | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $mk) { Write-Error "makeappx nicht gefunden"; exit 1 }
+          & $mk.FullName pack /d pkg /p "CargoDeckScanner_${{ inputs.version }}_x64.msix" /o
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Zum Herunterladen bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: CargoDeckScanner-Store-${{ inputs.version }}
+          path: "*.msix"
