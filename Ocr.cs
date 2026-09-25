@@ -24,12 +24,15 @@ static class Ocr
         return _engine;
     }
 
-    record Pass(string Name, bool Invert, double Cx, double Cw, double Zoom);
+    record Pass(string Name, bool Invert, double Cx, double Cw, double Zoom, float Contrast = 1f);
 
     static readonly Pass[] Plan =
     {
         new("rechts", true, 0.5, 0.5, 2),
         new("links", true, 0.0, 0.5, 2),
+        // Zusätzlich mit starkem Kontrast und noch grösser, damit blasse und kleine Zahlen sauber gelesen werden
+        new("rechts-k", true, 0.5, 0.5, 3, 1.9f),
+        new("links-k", true, 0.0, 0.5, 3, 1.9f),
         new("invert", true, 0.0, 1.0, 1),
         new("normal", false, 0.0, 1.0, 1),
     };
@@ -50,7 +53,9 @@ static class Ocr
             using (var g = Graphics.FromImage(bmp))
             {
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                float a = p.Invert ? -0.3f : 0.3f, b = p.Invert ? -0.59f : 0.59f, c = p.Invert ? -0.11f : 0.11f, o = p.Invert ? 1 : 0;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                float k = p.Contrast, a = (p.Invert ? -0.3f : 0.3f) * k, b = (p.Invert ? -0.59f : 0.59f) * k, c = (p.Invert ? -0.11f : 0.11f) * k;
+                float o = (p.Invert ? 1f : 0f) * k - (k - 1f) / 2f;
                 var cm = new ColorMatrix(new[]
                 {
                     new[] { a, a, a, 0f, 0f },
